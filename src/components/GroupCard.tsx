@@ -18,10 +18,13 @@ export default function GroupCard({ group, matches, names, tags, editable, onMat
   return (
     <div className="group-card">
       <header>
-        <h3>
-          Grupo {group.label}
-          <small>{group.player_ids.length} jugadores</small>
-        </h3>
+        <div>
+          <h3>
+            Grupo {group.label}
+            <small>{group.player_ids.length} jugadores</small>
+          </h3>
+          {group.player_ids.length === 2 && <div className="muted small">Victoria 2 pts · derrota 1 pt</div>}
+        </div>
         <span className={done === matches.length ? 'pill done' : 'pill'}>
           {done}/{matches.length}
         </span>

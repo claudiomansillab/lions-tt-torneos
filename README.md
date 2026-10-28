@@ -13,7 +13,8 @@ App web para organizar torneos de tenis de mesa con este formato:
    Generalizado a **N jugadores / G grupos**: el grupo *i+* recibe al (p+1)° del grupo *(i+p) mod G*.
    Con 4 grupos queda `A+: 1A 2B 3C`, `B+: 1B 2C 3D`, `C+: 1C 2D 3A`, `D+: 1D 2A 3B`.
    Nadie repite rival mientras haya al menos tantos grupos como jugadores por grupo (la app avisa si no).
-3. **Ranking general** (Ronda 1 + Ronda 2): victoria 1 punto, derrota 0. Desempate: diferencia de sets,
+3. **Ranking general** (Ronda 1 + Ronda 2): victoria 1 punto, derrota 0; en grupos de 2, victoria 2 y
+   derrota 1 (W.O. 0), igual que el 1° y 2° de un grupo de 3. Desempate: diferencia de sets,
    diferencia de tantos y, si sigue el empate total, sorteo (marcado con 🎲; es estable, todos ven el mismo).
    Dentro de un grupo, en un empate doble manda el partido entre ambos.
 4. **Llaves**: los mejores *K* (6 por defecto, configurable) pasan a eliminación directa sembrada

@@ -8,6 +8,7 @@ import {
   groupLabel,
   groupStandings,
   planGroups,
+  rankingAfterGroups,
   roundRobin,
   seedOrder,
 } from './tournament';
@@ -92,8 +93,34 @@ describe('grupos', () => {
   });
 
   it('victoria 1 punto, derrota 0', () => {
-    const rows = groupStandings(['a', 'b'], [m('a', 'b', 3, 2)]);
-    expect(rows.map((r) => [r.playerId, r.points])).toEqual([['a', 1], ['b', 0]]);
+    const rows = groupStandings(['a', 'b', 'c'], [m('a', 'b', 3, 2), m('a', 'c', 3, 0), m('b', 'c', 3, 1)]);
+    expect(rows.map((r) => [r.playerId, r.points])).toEqual([['a', 2], ['b', 1], ['c', 0]]);
+  });
+
+  it('grupo de 2: victoria 2, derrota 1 (W.O. 0)', () => {
+    expect(groupStandings(['a', 'b'], [m('a', 'b', 3, 2)]).map((r) => r.points)).toEqual([2, 1]);
+    expect(groupStandings(['a', 'b'], [m('a', 'b', 3, 0, { walkover: true })]).map((r) => r.points)).toEqual([2, 0]);
+  });
+
+  it('ranking general: grupos de 2 suman igual que 1° y 2° de un grupo de 3', () => {
+    const g3 = { id: 'g3', tournament_id: 't', round: 1 as const, label: 'A', position: 0, player_ids: ['a', 'b', 'c'] };
+    const g2 = { id: 'g2', tournament_id: 't', round: 1 as const, label: 'B', position: 1, player_ids: ['d', 'e'] };
+    const players = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, tournament_id: 't', name: id }));
+    const data: TournamentData = {
+      tournament: {
+        id: 't', owner_id: 'o', name: 'T', event_date: null, group_size: 3, qualifiers: 4,
+        sets_to_win_group: 3, sets_to_win_ko: 3, status: 'round1', created_at: '',
+      },
+      players,
+      groups: [g3, g2],
+      matches: [
+        m('a', 'b', 3, 0, { group_id: 'g3' }), m('a', 'c', 3, 0, { group_id: 'g3' }), m('b', 'c', 3, 0, { group_id: 'g3' }),
+        m('d', 'e', 3, 0, { group_id: 'g2' }),
+      ],
+    };
+    const pts = new Map(rankingAfterGroups(data).map((r) => [r.playerId, r.points]));
+    expect([pts.get('a'), pts.get('b'), pts.get('c')]).toEqual([2, 1, 0]);
+    expect([pts.get('d'), pts.get('e')]).toEqual([2, 1]);
   });
 
   it('triple empate: diferencia de sets', () => {

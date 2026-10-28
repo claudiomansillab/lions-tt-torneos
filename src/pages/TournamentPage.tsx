@@ -427,8 +427,8 @@ export default function TournamentPage() {
         (r1Groups.length ? (
           <>
             <p className="muted small" style={{ marginTop: 0 }}>
-              Suma de Ronda 1 + Ronda 2{!stageComplete(data, 'r2') && ' (parcial)'}. Victoria 1 punto, derrota 0.
-              Desempate: diferencia de sets, diferencia de tantos y, si sigue el empate, sorteo 🎲. Clasifican los{' '}
+              Suma de Ronda 1 + Ronda 2{!stageComplete(data, 'r2') && ' (parcial)'}. Victoria 1 punto, derrota 0 (en grupos de
+              2: victoria 2, derrota 1). Desempate: diferencia de sets, diferencia de tantos y, si sigue el empate, sorteo 🎲. Clasifican los{' '}
               {t.qualifiers} mejores.
             </p>
             <RankingTable rows={ranking} names={names} qualifiers={t.qualifiers} />

@@ -7,7 +7,8 @@
 //    Así nadie repite rival de la Ronda 1 mientras G >= tamaño de grupo.
 //  - Ranking general sumando Ronda 1 + Ronda 2; los K mejores pasan a llaves (eliminación directa,
 //    sembrados 1 vs K, etc., con BYE para los mejores sembrados si K no es potencia de 2).
-//  - Puntaje: victoria 1, derrota 0. Desempate: diferencia de sets, diferencia de tantos y,
+//  - Puntaje: victoria 1, derrota 0; en grupos de 2, victoria 2 y derrota 1 (W.O. 0), igual que el
+//    1° y 2° de un grupo de 3. Desempate: diferencia de sets, diferencia de tantos y,
 //    si persiste el empate total, sorteo (determinista por torneo/grupo: todos ven el mismo resultado).
 
 import type { Group, Match, SetScore, Stage, TournamentData } from './types';
@@ -100,8 +101,26 @@ function emptyRow(playerId: string): StatRow {
   return { playerId, played: 0, won: 0, lost: 0, points: 0, setsWon: 0, setsLost: 0, ptsWon: 0, ptsLost: 0 };
 }
 
-/** Puntos de tabla: victoria 1, derrota 0 (también por W.O.). */
-export function statsFor(playerIds: readonly string[], matches: readonly Match[]): Map<string, StatRow> {
+/** Puntos que da un partido terminado a uno de sus jugadores. */
+export type Scoring = (m: Match, won: boolean) => number;
+
+/** Victoria 1, derrota 0 (también por W.O.). */
+export const standardScoring: Scoring = (_m, won) => (won ? 1 : 0);
+
+/** Grupos de 2: victoria 2, derrota 1 (W.O. 0), lo mismo que el 1° y 2° de un grupo de 3. */
+export const pairScoring: Scoring = (m, won) => (won ? 2 : m.walkover ? 0 : 1);
+
+/** Puntaje según el tamaño del grupo del partido. */
+export function scoringByGroup(groups: readonly Group[]): Scoring {
+  const pairs = new Set(groups.filter((g) => g.player_ids.length === 2).map((g) => g.id));
+  return (m, won) => (m.group_id && pairs.has(m.group_id) ? pairScoring : standardScoring)(m, won);
+}
+
+export function statsFor(
+  playerIds: readonly string[],
+  matches: readonly Match[],
+  scoring: Scoring = standardScoring,
+): Map<string, StatRow> {
   const rows = new Map(playerIds.map((id) => [id, emptyRow(id)]));
   for (const m of matches) {
     if (!isDone(m) || !m.player1_id || !m.player2_id) continue;
@@ -114,12 +133,9 @@ export function statsFor(playerIds: readonly string[], matches: readonly Match[]
       if (!r) continue;
       const won = m.winner_id === id;
       r.played++;
-      if (won) {
-        r.won++;
-        r.points++;
-      } else {
-        r.lost++;
-      }
+      if (won) r.won++;
+      else r.lost++;
+      r.points += scoring(m, won);
       r.setsWon += sw;
       r.setsLost += sl;
       for (const s of m.sets) {
@@ -166,7 +182,8 @@ function sortWithDraw(rows: StatRow[], cmp: (a: StatRow, b: StatRow) => number, 
 export function groupStandings(playerIds: readonly string[], matches: readonly Match[], seed = ''): StatRow[] {
   const done = matches.filter(isDone);
   const complete = matches.length > 0 && done.length === matches.length;
-  const all = statsFor(playerIds, done);
+  const scoring = playerIds.length === 2 ? pairScoring : standardScoring;
+  const all = statsFor(playerIds, done, scoring);
   const sorted = [...all.values()].sort((a, b) => b.points - a.points);
   const result: StatRow[] = [];
   let i = 0;
@@ -179,6 +196,7 @@ export function groupStandings(playerIds: readonly string[], matches: readonly M
       const mini = statsFor(
         [...ids],
         done.filter((m) => ids.has(m.player1_id!) && ids.has(m.player2_id!)),
+        scoring,
       );
       const cmp = (a: StatRow, b: StatRow) => {
         const ma = mini.get(a.playerId)!;
@@ -194,8 +212,13 @@ export function groupStandings(playerIds: readonly string[], matches: readonly M
 }
 
 /** Ranking general (Ronda 1 + Ronda 2): puntos, diferencia de sets, diferencia de tantos, sorteo. */
-export function overallRanking(playerIds: readonly string[], matches: readonly Match[], seed = ''): StatRow[] {
-  const rows = [...statsFor(playerIds, matches).values()];
+export function overallRanking(
+  playerIds: readonly string[],
+  matches: readonly Match[],
+  seed = '',
+  scoring: Scoring = standardScoring,
+): StatRow[] {
+  const rows = [...statsFor(playerIds, matches, scoring).values()];
   const complete = matches.length > 0 && matches.every(isDone);
   sortWithDraw(rows, (a, b) => b.points - a.points || cmpDiffs(a, b), seed, complete);
   return rows;
@@ -414,6 +437,7 @@ export function rankingAfterGroups(data: TournamentData): StatRow[] {
     data.players.map((p) => p.id),
     data.matches.filter((m) => m.stage === 'r1' || m.stage === 'r2'),
     data.tournament.id,
+    scoringByGroup(data.groups),
   );
 }
 
