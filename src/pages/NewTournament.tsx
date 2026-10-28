@@ -87,7 +87,7 @@ export default function NewTournament() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            <span className="hint">Si no es divisible, algunos grupos tienen 1 más.</span>
+            <span className="hint">Si no es divisible, algunos grupos tienen 1 menos (ej. 10 jugadores: 3, 3, 2, 2).</span>
           </div>
           <div className="field">
             <label htmlFor="q">Clasificados a llaves</label>

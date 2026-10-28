@@ -194,6 +194,7 @@ table.standings td.pts { font-weight: 700; color: var(--text); }
 table.standings tr.q td:first-child { box-shadow: inset 3px 0 0 var(--purple); }
 .pos { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--surface-3); font-weight: 700; font-size: 12px; }
 .pos.p1 { background: var(--grad); }
+.tag.draw { color: #ffb3c0; background: var(--red-soft); }
 .tag { display: inline-block; font-size: 10px; font-weight: 700; color: var(--purple-light); background: var(--purple-soft); border-radius: 4px; padding: 1px 5px; margin-left: 6px; vertical-align: 1px; }
 
 .match-list { border-top: 1px solid var(--border); padding: 6px; display: flex; flex-direction: column; gap: 2px; }

@@ -7,6 +7,8 @@
 //    Así nadie repite rival de la Ronda 1 mientras G >= tamaño de grupo.
 //  - Ranking general sumando Ronda 1 + Ronda 2; los K mejores pasan a llaves (eliminación directa,
 //    sembrados 1 vs K, etc., con BYE para los mejores sembrados si K no es potencia de 2).
+//  - Puntaje: victoria 1, derrota 0. Desempate: diferencia de sets, diferencia de tantos y,
+//    si persiste el empate total, sorteo (determinista por torneo/grupo: todos ven el mismo resultado).
 
 import type { Group, Match, SetScore, Stage, TournamentData } from './types';
 
@@ -35,11 +37,15 @@ export function groupLabel(i: number): string {
 
 export const MIN_PLAYERS = 4;
 
+/**
+ * Grupos de `size` y, si sobran jugadores, algunos de `size - 1`:
+ * con grupos de 3, 11 jugadores -> 3,3,3,2 y 10 jugadores -> 3,3,2,2.
+ */
 export function groupCount(n: number, size: number): number {
-  return Math.max(2, Math.floor(n / size));
+  return Math.max(2, Math.ceil(n / size));
 }
 
-/** Tamaños de grupo para n jugadores (los primeros grupos reciben los sobrantes). */
+/** Tamaños de grupo para n jugadores (los primeros grupos son los más grandes). */
 export function planGroups(n: number, size: number): number[] {
   const g = groupCount(n, size);
   const base = Math.floor(n / g);
@@ -84,6 +90,8 @@ export interface StatRow {
   setsLost: number;
   ptsWon: number;
   ptsLost: number;
+  /** Su posición respecto de un vecino se definió por sorteo (empate total). */
+  drawn?: boolean;
 }
 
 export const isDone = (m: Match): boolean => m.winner_id != null;
@@ -92,7 +100,7 @@ function emptyRow(playerId: string): StatRow {
   return { playerId, played: 0, won: 0, lost: 0, points: 0, setsWon: 0, setsLost: 0, ptsWon: 0, ptsLost: 0 };
 }
 
-/** Puntos de tabla estilo ITTF: victoria 2, derrota 1, derrota por W.O. 0. */
+/** Puntos de tabla: victoria 1, derrota 0 (también por W.O.). */
 export function statsFor(playerIds: readonly string[], matches: readonly Match[]): Map<string, StatRow> {
   const rows = new Map(playerIds.map((id) => [id, emptyRow(id)]));
   for (const m of matches) {
@@ -106,9 +114,12 @@ export function statsFor(playerIds: readonly string[], matches: readonly Match[]
       if (!r) continue;
       const won = m.winner_id === id;
       r.played++;
-      if (won) r.won++;
-      else r.lost++;
-      r.points += won ? 2 : m.walkover ? 0 : 1;
+      if (won) {
+        r.won++;
+        r.points++;
+      } else {
+        r.lost++;
+      }
       r.setsWon += sw;
       r.setsLost += sl;
       for (const s of m.sets) {
@@ -120,25 +131,42 @@ export function statsFor(playerIds: readonly string[], matches: readonly Match[]
   return rows;
 }
 
-const ratio = (w: number, l: number) => (w + l === 0 ? 0 : w / (w + l));
+/** Diferencia de sets y luego diferencia de tantos (mayor primero). */
+function cmpDiffs(a: StatRow, b: StatRow): number {
+  return b.setsWon - b.setsLost - (a.setsWon - a.setsLost) || b.ptsWon - b.ptsLost - (a.ptsWon - a.ptsLost);
+}
 
-/** Comparador: puntos, ratio de sets, ratio de tantos. */
-function cmpCore(a: StatRow, b: StatRow): number {
-  return (
-    b.points - a.points ||
-    ratio(b.setsWon, b.setsLost) - ratio(a.setsWon, a.setsLost) ||
-    ratio(b.ptsWon, b.ptsLost) - ratio(a.ptsWon, a.ptsLost)
-  );
+/** Hash FNV-1a: "sorteo" estable para que todos vean el mismo desempate. */
+function drawKey(seed: string, playerId: string): number {
+  let h = 0x811c9dc5;
+  const s = `${seed}:${playerId}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
 }
 
 /**
- * Tabla de un grupo. Empates en puntos se resuelven con una mini-tabla entre los empatados
- * (puntos, sets, tantos sólo de esos partidos), luego estadísticas generales y orden de sorteo.
+ * Ordena con `cmp` y, en empate total, por sorteo. Si `markDraws`, marca las filas que quedaron
+ * ordenadas por sorteo.
  */
-export function groupStandings(playerIds: readonly string[], matches: readonly Match[]): StatRow[] {
+function sortWithDraw(rows: StatRow[], cmp: (a: StatRow, b: StatRow) => number, seed: string, markDraws: boolean) {
+  rows.sort((a, b) => cmp(a, b) || drawKey(seed, a.playerId) - drawKey(seed, b.playerId));
+  if (!markDraws) return;
+  for (let i = 0; i + 1 < rows.length; i++) {
+    if (cmp(rows[i], rows[i + 1]) === 0) rows[i].drawn = rows[i + 1].drawn = true;
+  }
+}
+
+/**
+ * Tabla de un grupo. Empates en puntos: resultado entre los empatados (en un empate doble, quién le
+ * ganó a quién), luego diferencia de sets y de tantos, y por último sorteo.
+ */
+export function groupStandings(playerIds: readonly string[], matches: readonly Match[], seed = ''): StatRow[] {
   const done = matches.filter(isDone);
+  const complete = matches.length > 0 && done.length === matches.length;
   const all = statsFor(playerIds, done);
-  const order = new Map(playerIds.map((id, i) => [id, i]));
   const sorted = [...all.values()].sort((a, b) => b.points - a.points);
   const result: StatRow[] = [];
   let i = 0;
@@ -152,12 +180,12 @@ export function groupStandings(playerIds: readonly string[], matches: readonly M
         [...ids],
         done.filter((m) => ids.has(m.player1_id!) && ids.has(m.player2_id!)),
       );
-      cluster.sort(
-        (a, b) =>
-          cmpCore(mini.get(a.playerId)!, mini.get(b.playerId)!) ||
-          cmpCore(a, b) ||
-          order.get(a.playerId)! - order.get(b.playerId)!,
-      );
+      const cmp = (a: StatRow, b: StatRow) => {
+        const ma = mini.get(a.playerId)!;
+        const mb = mini.get(b.playerId)!;
+        return mb.points - ma.points || cmpDiffs(ma, mb) || cmpDiffs(a, b);
+      };
+      sortWithDraw(cluster, cmp, seed, complete);
     }
     result.push(...cluster);
     i = j;
@@ -165,18 +193,12 @@ export function groupStandings(playerIds: readonly string[], matches: readonly M
   return result;
 }
 
-/** Ranking general (Ronda 1 + Ronda 2). */
-export function overallRanking(playerIds: readonly string[], matches: readonly Match[]): StatRow[] {
-  const order = new Map(playerIds.map((id, i) => [id, i]));
-  return [...statsFor(playerIds, matches).values()].sort(
-    (a, b) =>
-      b.points - a.points ||
-      b.won - a.won ||
-      b.setsWon - b.setsLost - (a.setsWon - a.setsLost) ||
-      b.ptsWon - b.ptsLost - (a.ptsWon - a.ptsLost) ||
-      b.setsWon - a.setsWon ||
-      order.get(a.playerId)! - order.get(b.playerId)!,
-  );
+/** Ranking general (Ronda 1 + Ronda 2): puntos, diferencia de sets, diferencia de tantos, sorteo. */
+export function overallRanking(playerIds: readonly string[], matches: readonly Match[], seed = ''): StatRow[] {
+  const rows = [...statsFor(playerIds, matches).values()];
+  const complete = matches.length > 0 && matches.every(isDone);
+  sortWithDraw(rows, (a, b) => b.points - a.points || cmpDiffs(a, b), seed, complete);
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -381,7 +403,7 @@ export function stageComplete(data: TournamentData, stage: Stage): boolean {
 
 export function generateRound2(data: TournamentData) {
   const ordered = groupsOf(data, 1).map((g) =>
-    groupStandings(g.player_ids, data.matches.filter((m) => m.group_id === g.id)).map((r) => r.playerId),
+    groupStandings(g.player_ids, data.matches.filter((m) => m.group_id === g.id), g.id).map((r) => r.playerId),
   );
   const { groups, rematches } = buildRound2(ordered);
   return { ...groupRows(data.tournament.id, 2, groups, '+'), rematches };
@@ -391,6 +413,7 @@ export function rankingAfterGroups(data: TournamentData): StatRow[] {
   return overallRanking(
     data.players.map((p) => p.id),
     data.matches.filter((m) => m.stage === 'r1' || m.stage === 'r2'),
+    data.tournament.id,
   );
 }
 

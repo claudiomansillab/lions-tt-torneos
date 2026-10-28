@@ -66,9 +66,10 @@ describe('ronda 2', () => {
 
   it('sin repetidos cuando hay al menos tantos grupos como jugadores por grupo', () => {
     expect(expectedRematches(9, 3)).toBe(0);
+    expect(expectedRematches(10, 3)).toBe(0);
     expect(expectedRematches(14, 3)).toBe(0);
     expect(expectedRematches(16, 4)).toBe(0);
-    expect(expectedRematches(10, 3)).toBeGreaterThan(0); // 3 grupos, uno de 4
+    expect(expectedRematches(5, 3)).toBeGreaterThan(0); // sólo 2 grupos (3 y 2)
   });
 });
 
@@ -77,16 +78,60 @@ describe('grupos', () => {
     expect([0, 1, 25, 26].map(groupLabel)).toEqual(['A', 'B', 'Z', 'AA']);
   });
 
+  it('sobrantes: grupos de 2', () => {
+    expect(planGroups(9, 3)).toEqual([3, 3, 3]);
+    expect(planGroups(11, 3)).toEqual([3, 3, 3, 2]); // sobran 2 -> un grupo de 2
+    expect(planGroups(10, 3)).toEqual([3, 3, 2, 2]); // sobra 1 -> dos grupos de 2
+    expect(planGroups(4, 3)).toEqual([2, 2]);
+    expect(planGroups(13, 4)).toEqual([4, 3, 3, 3]);
+  });
+
   it('todos contra todos', () => {
     expect(roundRobin(['a', 'b', 'c'])).toHaveLength(3);
     expect(roundRobin(['a', 'b', 'c', 'd', 'e'])).toHaveLength(10);
   });
 
-  it('desempate por resultado entre empatados', () => {
-    // triple empate a 3 puntos: a>b, b>c, c>a; desempata ratio de sets en la mini-tabla
-    // a 5-3 (.625), c 4-5 (.444), b 3-4 (.429)
+  it('victoria 1 punto, derrota 0', () => {
+    const rows = groupStandings(['a', 'b'], [m('a', 'b', 3, 2)]);
+    expect(rows.map((r) => [r.playerId, r.points])).toEqual([['a', 1], ['b', 0]]);
+  });
+
+  it('triple empate: diferencia de sets', () => {
+    // a>b 3-0, b>c 3-1, c>a 3-2  ->  sets a +2, b -1, c -1
     const ms = [m('a', 'b', 3, 0), m('b', 'c', 3, 1), m('c', 'a', 3, 2)];
-    expect(groupStandings(['a', 'b', 'c'], ms).map((r) => r.playerId)).toEqual(['a', 'c', 'b']);
+    const rows = groupStandings(['a', 'b', 'c'], ms, 'g');
+    expect(rows[0].playerId).toBe('a');
+    expect(rows[0].drawn).toBeFalsy();
+  });
+
+  it('triple empate: diferencia de tantos si los sets empatan', () => {
+    const ms = [
+      m('a', 'b', 2, 1, { sets: [[11, 5], [5, 11], [11, 9]] }),
+      m('b', 'c', 2, 1, { sets: [[11, 3], [9, 11], [11, 4]] }),
+      m('c', 'a', 2, 1, { sets: [[11, 9], [9, 11], [11, 9]] }),
+    ];
+    // diferencia de sets 0 para todos; tantos: b 56-45 (+11), a 56-56 (0), c 49-60 (-11)
+    const rows = groupStandings(['a', 'b', 'c'], ms, 'g');
+    expect(rows.map((r) => r.playerId)).toEqual(['b', 'a', 'c']);
+    expect(rows.some((r) => r.drawn)).toBe(false);
+  });
+
+  it('empate total: sorteo estable y marcado', () => {
+    const ms = [m('a', 'b', 3, 0), m('b', 'c', 3, 0), m('c', 'a', 3, 0)];
+    const first = groupStandings(['a', 'b', 'c'], ms, 'grupo-1').map((r) => r.playerId);
+    const again = groupStandings(['c', 'b', 'a'], ms, 'grupo-1');
+    expect(again.map((r) => r.playerId)).toEqual(first);
+    expect(again.every((r) => r.drawn)).toBe(true);
+  });
+
+  it('empate doble: gana quien ganó el partido entre ellos', () => {
+    // grupo de 4: a y b con 2 victorias; b le ganó a a
+    const ms = [
+      m('b', 'a', 3, 2), m('a', 'c', 3, 0), m('a', 'd', 3, 0),
+      m('c', 'b', 3, 0), m('b', 'd', 3, 2), m('c', 'd', 0, 3),
+    ];
+    const ids = groupStandings(['a', 'b', 'c', 'd'], ms).map((r) => r.playerId);
+    expect(ids.indexOf('b')).toBeLessThan(ids.indexOf('a'));
   });
 });
 
@@ -117,8 +162,9 @@ describe('llaves', () => {
       matches: [m('p1', 'p2', 3, 0), m('p3', 'p4', 3, 0), m('p5', 'p6', 3, 0), m('p1', 'p3', 3, 0)],
     };
     const ko = generateKnockout(data);
+    // p1 2 victorias; p3 y p5 1 victoria, desempata diferencia de sets (p5 +3, p3 0)
     const semis = ko.filter((x) => x.ko_round === 2);
-    expect(semis.map((s) => s.player1_id)).toEqual(['p1', 'p3']);
+    expect(semis.map((s) => s.player1_id)).toEqual(['p1', 'p5']);
   });
 });
 

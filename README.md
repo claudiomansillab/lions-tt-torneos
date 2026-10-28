@@ -2,7 +2,8 @@
 
 App web para organizar torneos de tenis de mesa con este formato:
 
-1. **Ronda 1**: grupos por sorteo, todos contra todos.
+1. **Ronda 1**: grupos por sorteo, todos contra todos. Si no es divisible, quedan grupos de uno menos
+   (con grupos de 3: 11 jugadores → 3·3·3·2, 10 jugadores → 3·3·2·2).
 2. **Ronda 2**: grupos cruzados según la posición en Ronda 1:
    ```
    A+ : 1A, 2B, 3C
@@ -12,8 +13,9 @@ App web para organizar torneos de tenis de mesa con este formato:
    Generalizado a **N jugadores / G grupos**: el grupo *i+* recibe al (p+1)° del grupo *(i+p) mod G*.
    Con 4 grupos queda `A+: 1A 2B 3C`, `B+: 1B 2C 3D`, `C+: 1C 2D 3A`, `D+: 1D 2A 3B`.
    Nadie repite rival mientras haya al menos tantos grupos como jugadores por grupo (la app avisa si no).
-3. **Ranking general** (Ronda 1 + Ronda 2): victoria 2 pts, derrota 1, W.O. 0. Desempate: victorias,
-   diferencia de sets, diferencia de tantos.
+3. **Ranking general** (Ronda 1 + Ronda 2): victoria 1 punto, derrota 0. Desempate: diferencia de sets,
+   diferencia de tantos y, si sigue el empate total, sorteo (marcado con 🎲; es estable, todos ven el mismo).
+   Dentro de un grupo, en un empate doble manda el partido entre ambos.
 4. **Llaves**: los mejores *K* (6 por defecto, configurable) pasan a eliminación directa sembrada
    (1 vs 8, 4 vs 5, 2 vs 7, 3 vs 6). Si *K* no es potencia de 2, los mejores sembrados reciben BYE.
 

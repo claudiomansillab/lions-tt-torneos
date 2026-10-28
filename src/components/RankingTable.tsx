@@ -34,7 +34,14 @@ export default function RankingTable({ rows, names, qualifiers }: Props) {
                 <td>
                   <span className={i === 0 && r.played > 0 ? 'pos p1' : 'pos'}>{i + 1}</span>
                 </td>
-                <td className="name">{names.get(r.playerId)}</td>
+                <td className="name">
+                  {names.get(r.playerId)}
+                  {r.drawn && (
+                    <span className="tag draw" title="Empate total: posición definida por sorteo">
+                      🎲 sorteo
+                    </span>
+                  )}
+                </td>
                 <td>{r.played}</td>
                 <td>{r.won}</td>
                 <td>{r.lost}</td>

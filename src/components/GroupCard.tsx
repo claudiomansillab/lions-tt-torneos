@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function GroupCard({ group, matches, names, tags, editable, onMatch }: Props) {
-  const rows = groupStandings(group.player_ids, matches);
+  const rows = groupStandings(group.player_ids, matches, group.id);
   const done = matches.filter((m) => m.winner_id).length;
 
   return (
@@ -47,6 +47,11 @@ export default function GroupCard({ group, matches, names, tags, editable, onMat
               <td className="name">
                 {names.get(r.playerId) ?? '—'}
                 {tags?.get(r.playerId) && <span className="tag">{tags.get(r.playerId)}</span>}
+                {r.drawn && (
+                  <span className="tag draw" title="Empate total: posición definida por sorteo">
+                    🎲 sorteo
+                  </span>
+                )}
               </td>
               <td>{r.played}</td>
               <td>{r.won}</td>

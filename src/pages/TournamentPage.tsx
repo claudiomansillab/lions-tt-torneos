@@ -71,7 +71,7 @@ export default function TournamentPage() {
     const r2Groups = groupsOf(data, 2);
     const tags = new Map<string, string>();
     for (const g of r1Groups) {
-      groupStandings(g.player_ids, data.matches.filter((m) => m.group_id === g.id)).forEach((r, i) =>
+      groupStandings(g.player_ids, data.matches.filter((m) => m.group_id === g.id), g.id).forEach((r, i) =>
         tags.set(r.playerId, `${i + 1}${g.label}`),
       );
     }
@@ -427,8 +427,9 @@ export default function TournamentPage() {
         (r1Groups.length ? (
           <>
             <p className="muted small" style={{ marginTop: 0 }}>
-              Suma de Ronda 1 + Ronda 2{!stageComplete(data, 'r2') && ' (parcial)'}. Victoria 2 pts, derrota 1, W.O. 0.
-              Desempate: victorias, diferencia de sets, diferencia de tantos. Clasifican los {t.qualifiers} mejores.
+              Suma de Ronda 1 + Ronda 2{!stageComplete(data, 'r2') && ' (parcial)'}. Victoria 1 punto, derrota 0.
+              Desempate: diferencia de sets, diferencia de tantos y, si sigue el empate, sorteo 🎲. Clasifican los{' '}
+              {t.qualifiers} mejores.
             </p>
             <RankingTable rows={ranking} names={names} qualifiers={t.qualifiers} />
           </>
