@@ -39,17 +39,27 @@ npm test               # tests de la lógica del torneo
 
 1. Crea un proyecto en [supabase.com](https://supabase.com).
 2. **SQL Editor → New query**: pega y ejecuta [`supabase/schema.sql`](supabase/schema.sql).
-   Crea las tablas, índices, políticas RLS (lectura pública, escritura sólo del organizador dueño) y Realtime.
+   Crea las tablas, índices, políticas RLS (lectura pública, escritura sólo organizadores) y Realtime.
+   Es seguro volver a ejecutarlo completo si actualizas la app.
 3. **Project Settings → API**: copia la *Project URL* y la *anon / publishable key* en `.env`:
    ```
    VITE_SUPABASE_URL=https://xxxx.supabase.co
    VITE_SUPABASE_ANON_KEY=...
    ```
    La anon key es pública por diseño; la seguridad la dan las políticas RLS.
-4. **Authentication → URL Configuration**: agrega la URL donde publiques la app
-   (ej. `https://TU-USUARIO.github.io/TU-REPO/`) en *Site URL* y *Redirect URLs*, para que funcione
-   el correo de confirmación de cuenta. Si no quieres confirmación por correo, desactívala en
-   *Authentication → Providers → Email*.
+4. **Organizadores (sólo ellos pueden crear y modificar torneos):**
+   - **Authentication → Sign In / Providers → User Signups**: desactiva *Allow new users to sign up*.
+   - **Authentication → Users → Add user → Create new user**: crea cada cuenta con correo y contraseña,
+     marcando *Auto Confirm User*.
+   - En **SQL Editor**, autorízalas:
+     ```sql
+     insert into public.organizers (user_id, email)
+     select id, email from auth.users
+     where email in ('organizador1@correo.com', 'organizador2@correo.com')
+     on conflict (user_id) do nothing;
+     ```
+   Cualquier organizador puede modificar cualquier torneo. El resto del mundo sólo puede verlos.
+   Aunque alguien lograra crear una cuenta, las políticas RLS no le dejan escribir si no está en `organizers`.
 
 ## Publicar en GitHub Pages
 
@@ -64,7 +74,7 @@ con las mismas dos variables de entorno.
 
 ## Uso
 
-1. Ingresa (organizador) → **Nuevo torneo**: nombre, jugadores (uno por línea), tamaño de grupo,
+1. Ingresa con una cuenta de organizador → **Nuevo torneo**: nombre, jugadores (uno por línea), tamaño de grupo,
    clasificados y formato de sets.
 2. **Sortear grupos Ronda 1** → carga resultados tocando cada partido.
 3. Al completar la Ronda 1 → **Generar Ronda 2** (grupos cruzados automáticamente).

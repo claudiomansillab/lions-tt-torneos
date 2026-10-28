@@ -38,7 +38,7 @@ const CLEARED: MatchResult = { sets: [], p1_sets: null, p2_sets: null, winner_id
 
 export default function TournamentPage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { isOrganizer } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<TournamentData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export default function TournamentPage() {
 
   const t = data.tournament;
   const { names, r1Groups, r2Groups, tags, ranking, ko, seeds, champ } = derived;
-  const canEdit = !!user && user.id === t.owner_id;
+  const canEdit = isOrganizer;
   const stepIdx = STEPS.indexOf(t.status);
 
   const editableStage = (s: Stage) =>

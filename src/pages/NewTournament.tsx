@@ -7,7 +7,7 @@ import { bestOf, parseNames } from '../components/ui';
 import { Loading } from './Home';
 
 export default function NewTournament() {
-  const { user, loading } = useAuth();
+  const { user, isOrganizer, loading } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -34,6 +34,7 @@ export default function NewTournament() {
 
   if (loading) return <Loading />;
   if (!user) return <Navigate to="/login" replace />;
+  if (!isOrganizer) return <Navigate to="/" replace />;
 
   const sizes = n >= MIN_PLAYERS ? planGroups(n, groupSize) : [];
   const rematches = n >= MIN_PLAYERS ? expectedRematches(n, groupSize) : 0;

@@ -7,7 +7,7 @@ import NewTournament from './pages/NewTournament';
 import TournamentPage from './pages/TournamentPage';
 
 export default function App() {
-  const { user, signOut } = useAuth();
+  const { user, isOrganizer, signOut } = useAuth();
   const navigate = useNavigate();
 
   return (
@@ -40,7 +40,7 @@ export default function App() {
                 Ingresar
               </Link>
             ))}
-          {user && (
+          {isOrganizer && (
             <Link to="/nuevo" className="btn btn-primary btn-sm">
               + Nuevo torneo
             </Link>

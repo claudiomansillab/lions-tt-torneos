@@ -8,9 +8,10 @@ interface AuthUser {
 
 interface AuthState {
   user: AuthUser | null;
+  /** Sólo los organizadores (tabla organizers) pueden crear y modificar torneos. */
+  isOrganizer: boolean;
   loading: boolean;
   signIn(email: string, password: string): Promise<void>;
-  signUp(email: string, password: string): Promise<{ needsConfirmation: boolean }>;
   signOut(): Promise<void>;
 }
 
@@ -20,39 +21,45 @@ const LOCAL_USER: AuthUser = { id: LOCAL_USER_ID, email: null };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(supabase ? null : LOCAL_USER);
+  const [isOrganizer, setIsOrganizer] = useState(!supabase);
   const [loading, setLoading] = useState(!!supabase);
 
   useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => {
-      const u = data.session?.user;
+    const sb = supabase;
+    if (!sb) return;
+    let active = true;
+
+    const apply = async (u: { id: string; email?: string | null } | null | undefined) => {
+      let organizer = false;
+      if (u) {
+        const { data, error } = await sb.rpc('is_organizer');
+        organizer = !error && data === true;
+      }
+      if (!active) return;
       setUser(u ? { id: u.id, email: u.email ?? null } : null);
+      setIsOrganizer(organizer);
       setLoading(false);
+    };
+
+    sb.auth.getSession().then(({ data }) => apply(data.session?.user));
+    const { data } = sb.auth.onAuthStateChange((_event, session) => {
+      // Diferido: no llamar a Supabase dentro del callback de auth.
+      setTimeout(() => apply(session?.user), 0);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user;
-      setUser(u ? { id: u.id, email: u.email ?? null } : null);
-    });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   const value: AuthState = {
     user,
+    isOrganizer,
     loading,
     async signIn(email, password) {
       if (!supabase) return;
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
-    },
-    async signUp(email, password) {
-      if (!supabase) return { needsConfirmation: false };
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin + window.location.pathname },
-      });
-      if (error) throw new Error(error.message);
-      return { needsConfirmation: !data.session };
+      if (error) throw new Error(error.message === 'Invalid login credentials' ? 'Correo o contraseña incorrectos.' : error.message);
     },
     async signOut() {
       if (supabase) await supabase.auth.signOut();

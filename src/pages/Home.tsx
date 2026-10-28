@@ -6,16 +6,13 @@ import type { Tournament } from '../lib/types';
 import { StatusPill, formatDate } from '../components/ui';
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, isOrganizer } = useAuth();
   const [items, setItems] = useState<Tournament[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     repo.listTournaments().then(setItems, (e: Error) => setError(e.message));
   }, []);
-
-  const mine = items?.filter((t) => t.owner_id === user?.id) ?? [];
-  const others = items?.filter((t) => t.owner_id !== user?.id) ?? [];
 
   return (
     <>
@@ -29,14 +26,16 @@ export default function Home() {
             del torneo y los jugadores ven los resultados en vivo.
           </p>
         </div>
-        {user ? (
+        {isOrganizer ? (
           <Link to="/nuevo" className="btn btn-primary">
             + Crear torneo
           </Link>
         ) : (
-          <Link to="/login" className="btn btn-primary">
-            Ingresar para organizar
-          </Link>
+          !user && (
+            <Link to="/login" className="btn btn-primary">
+              Ingreso organizadores
+            </Link>
+          )
         )}
       </section>
 
@@ -46,6 +45,12 @@ export default function Home() {
             <b>Modo local:</b> los datos se guardan sólo en este navegador. Configura <code>VITE_SUPABASE_URL</code> y{' '}
             <code>VITE_SUPABASE_ANON_KEY</code> para guardar en Supabase y compartir torneos.
           </span>
+        </div>
+      )}
+
+      {user && !isOrganizer && (
+        <div className="banner warn" style={{ marginBottom: 20 }}>
+          Tu cuenta ({user.email}) no está autorizada como organizador: puedes ver los torneos, pero no modificarlos.
         </div>
       )}
 
@@ -59,8 +64,7 @@ export default function Home() {
         </div>
       )}
 
-      {mine.length > 0 && <TournamentList title={repo.mode === 'local' ? 'Torneos' : 'Mis torneos'} items={mine} />}
-      {others.length > 0 && <TournamentList title="Torneos publicados" items={others} />}
+      {items && items.length > 0 && <TournamentList title="Torneos" items={items} />}
 
       <div className="format-steps">
         <div className="step">

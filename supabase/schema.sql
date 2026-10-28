@@ -58,6 +58,26 @@ create table if not exists public.matches (
   check ((stage = 'ko') or group_id is not null)
 );
 
+-- Organizadores autorizados: sólo estos usuarios pueden crear o modificar torneos.
+-- Se administra desde el dashboard (SQL Editor); la app no puede escribir en esta tabla.
+create table if not exists public.organizers (
+  user_id    uuid primary key references auth.users (id) on delete cascade,
+  email      text,
+  created_at timestamptz not null default now()
+);
+
+create or replace function public.is_organizer()
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select exists (select 1 from public.organizers where user_id = (select auth.uid()));
+$$;
+
+revoke execute on function public.is_organizer() from public, anon;
+grant execute on function public.is_organizer() to authenticated;
+
 -- ---------- Índices (FK + columnas usadas en RLS / filtros) ----------
 
 create index if not exists tournaments_owner_id_idx on public.tournaments (owner_id);
@@ -95,14 +115,23 @@ revoke all on public.tournaments, public.players, public.groups, public.matches 
 grant select on public.tournaments, public.players, public.groups, public.matches to anon, authenticated;
 grant insert, update, delete on public.tournaments, public.players, public.groups, public.matches to authenticated;
 
+revoke all on public.organizers from anon, authenticated;
+grant select on public.organizers to authenticated;
+
 -- ---------- Row Level Security ----------
 -- Lectura pública (para compartir el link del torneo con los jugadores).
--- Escritura sólo para el organizador dueño del torneo.
+-- Escritura sólo para organizadores autorizados (tabla organizers); cualquiera de ellos
+-- puede modificar cualquier torneo.
 
 alter table public.tournaments enable row level security;
 alter table public.players     enable row level security;
 alter table public.groups      enable row level security;
 alter table public.matches     enable row level security;
+alter table public.organizers  enable row level security;
+
+drop policy if exists organizers_read_self on public.organizers;
+create policy organizers_read_self on public.organizers
+  for select to authenticated using (user_id = (select auth.uid()));
 
 drop policy if exists tournaments_read on public.tournaments;
 create policy tournaments_read on public.tournaments
@@ -110,19 +139,20 @@ create policy tournaments_read on public.tournaments
 
 drop policy if exists tournaments_insert on public.tournaments;
 create policy tournaments_insert on public.tournaments
-  for insert to authenticated with check (owner_id = (select auth.uid()));
+  for insert to authenticated
+  with check (owner_id = (select auth.uid()) and (select public.is_organizer()));
 
 drop policy if exists tournaments_update on public.tournaments;
 create policy tournaments_update on public.tournaments
   for update to authenticated
-  using (owner_id = (select auth.uid()))
-  with check (owner_id = (select auth.uid()));
+  using ((select public.is_organizer()))
+  with check ((select public.is_organizer()));
 
 drop policy if exists tournaments_delete on public.tournaments;
 create policy tournaments_delete on public.tournaments
-  for delete to authenticated using (owner_id = (select auth.uid()));
+  for delete to authenticated using ((select public.is_organizer()));
 
--- Tablas hijas: el usuario debe ser dueño del torneo al que pertenece la fila.
+-- Tablas hijas: lectura pública, escritura sólo organizadores.
 do $$
 declare
   t text;
@@ -135,13 +165,22 @@ begin
     execute format('drop policy if exists %1$s_write on public.%1$I', t);
     execute format(
       'create policy %1$s_write on public.%1$I for all to authenticated
-         using (exists (select 1 from public.tournaments tr
-                        where tr.id = tournament_id and tr.owner_id = (select auth.uid())))
-         with check (exists (select 1 from public.tournaments tr
-                             where tr.id = tournament_id and tr.owner_id = (select auth.uid())))', t);
+         using ((select public.is_organizer()))
+         with check ((select public.is_organizer()))', t);
   end loop;
 end;
 $$;
+
+-- ---------- Alta de organizadores ----------
+-- 1. Authentication -> Users -> Add user -> Create new user (marcar "Auto Confirm User").
+-- 2. Ejecutar (con los correos reales):
+--
+--   insert into public.organizers (user_id, email)
+--   select id, email from auth.users
+--   where email in ('organizador1@correo.com', 'organizador2@correo.com')
+--   on conflict (user_id) do nothing;
+--
+-- Para quitar a alguien:  delete from public.organizers where email = '...';
 
 -- ---------- Realtime (resultados en vivo) ----------
 
